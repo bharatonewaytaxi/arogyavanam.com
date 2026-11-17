@@ -1,0 +1,13 @@
+backup-*/
+bk/
+logs/
+shots/
+shot*.png
+img-ai-unused/
+deploy/
+audit/
+study/
+*.log
+__pycache__/
+.env
+drafts/
