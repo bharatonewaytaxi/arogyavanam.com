@@ -5,6 +5,7 @@ function ist(){return new Date(Date.now()+19800000).toISOString().replace("T"," 
 async function enquiry(r,env){
   if(r.method!=="POST")return J({ok:false,error:"Method not allowed"},405);
   let d;try{d=await r.json()}catch{return J({ok:false,error:"Invalid request"},400)}
+  if(!d||typeof d!=="object")return J({ok:false,error:"Invalid request"},400);
   if(d.website)return J({ok:true});
   const name=String(d.name||"").trim().slice(0,100),phone=String(d.phone||"").trim().slice(0,20),email=String(d.email||"").trim().slice(0,120),plot=String(d.plot||"").slice(0,80),msg=String(d.message||"").slice(0,2000),page=String(d.page||"").slice(0,300);
   if(name.length<2)return J({ok:false,error:"Please enter your name"},400);
@@ -29,6 +30,7 @@ const SLOTS=["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17
 async function visit(r,env){
   if(r.method!=="POST")return J({ok:false,error:"Method not allowed"},405);
   let d;try{d=await r.json()}catch{return J({ok:false,error:"Invalid request"},400)}
+  if(!d||typeof d!=="object")return J({ok:false,error:"Invalid request"},400);
   if(d.website)return J({ok:true});
   const name=String(d.name||"").trim().slice(0,100),phone=String(d.phone||"").trim().slice(0,20),date=String(d.date||""),slot=String(d.slot||""),lang=String(d.lang||"en").slice(0,5),page=String(d.page||"").slice(0,300);
   if(name.length<2)return J({ok:false,error:"Please enter your name"},400);
@@ -43,14 +45,17 @@ async function visit(r,env){
   const c=await env.DB.prepare("SELECT COUNT(*) n FROM ratelimit WHERE ip=? AND ts>?").bind(ip,now-600000).first();
   if(c.n>=5)return J({ok:false,error:"Too many requests, please try again later"},429);
   await env.DB.prepare("INSERT INTO ratelimit VALUES(?,?)").bind(ip,now).run();
+  await env.DB.prepare("DELETE FROM ratelimit WHERE ts<?").bind(now-86400000).run();
   const t=ist();
   const res=await env.DB.prepare("INSERT INTO site_visits(name,phone,visit_date,visit_slot,lang,page,created_at_ist,user_agent,ip) VALUES(?,?,?,?,?,?,?,?,?)").bind(name,phone,date,slot,lang,page,t,ua,ip).run();
   let mailed=false;
-  if(!d.test){try{
-    const body=`New site visit request from arogyavana.com\n\nName: ${name}\nPhone: ${phone}\nDate: ${date}\nTime slot: ${slot} IST\nLanguage: ${lang}\nPage: ${page}\nRequested: ${t}\nID: ${res.meta.last_row_id}\n`;
-    const raw=["From: Arogya Vana Website <enquiry@arogyavana.com>","To: arogyavanablr@gmail.com",`Subject: Site visit request: ${esc(name)} on ${date} ${slot}`,`Message-ID: <${crypto.randomUUID()}@arogyavana.com>`,`Date: ${new Date().toUTCString()}`,"MIME-Version: 1.0","Content-Type: text/plain; charset=utf-8","",body].join("\r\n");
+  // Test bookings are still emailed (tagged [TEST]) so a stored booking is never silent.
+  const tag=d.test?"[TEST] ":"";
+  try{
+    const body=`${tag}New site visit request from arogyavana.com\n\nName: ${name}\nPhone: ${phone}\nDate: ${date}\nTime slot: ${slot} IST\nLanguage: ${lang}\nPage: ${page}\nRequested: ${t}\nID: ${res.meta.last_row_id}\n`;
+    const raw=["From: Arogya Vana Website <enquiry@arogyavana.com>","To: arogyavanablr@gmail.com",`Subject: ${tag}Site visit request: ${esc(name)} on ${date} ${slot}`,`Message-ID: <${crypto.randomUUID()}@arogyavana.com>`,`Date: ${new Date().toUTCString()}`,"MIME-Version: 1.0","Content-Type: text/plain; charset=utf-8","",body].join("\r\n");
     await env.MAIL.send(new EmailMessage("enquiry@arogyavana.com","arogyavanablr@gmail.com",raw));mailed=true;
-  }catch(e){console.log("mail fail",e.message)}}
+  }catch(e){console.log("mail fail",e.message)}
   return J({ok:true,id:res.meta.last_row_id,mailed});
 }
 const REDIRECTS={"/sandalwood-farming-returns":"/sandalwood-growth-cycle/","/sandalwood-farming-returns/":"/sandalwood-growth-cycle/","/farmland-vs-gold-investment":"/farmland-vs-gold/","/farmland-vs-gold-investment/":"/farmland-vs-gold/","/nri-farmland-investment-karnataka":"/farmland-for-nris-karnataka/","/nri-farmland-investment-karnataka/":"/farmland-for-nris-karnataka/"};
@@ -69,5 +74,5 @@ export default{async fetch(r,env){const u=new URL(r.url);
       return new Response(nf.body,{status:404,headers:h});
     }
   }
-  if(u.pathname.startsWith("/img/")){const h=new Headers(a.headers);h.set("cache-control","public, max-age=2592000");return new Response(a.body,{status:a.status,headers:h})}
+  if(a.ok&&u.pathname.startsWith("/img/")){const h=new Headers(a.headers);h.set("cache-control","public, max-age=2592000");return new Response(a.body,{status:a.status,headers:h})}
   return a}}
