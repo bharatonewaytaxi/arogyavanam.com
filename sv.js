@@ -3,13 +3,16 @@ var cal=document.getElementById('svd'),sl=document.getElementById('svs'),M=docum
 var SL=['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'];
 function p2(n){return(n<10?'0':'')+n}function iso(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())}
 var wd=new Intl.DateTimeFormat(LC,{weekday:'short'}),mo=new Intl.DateTimeFormat(LC,{month:'short'}),full=new Intl.DateTimeFormat(LC,{weekday:'long',day:'numeric',month:'long',year:'numeric'}),tf=new Intl.DateTimeFormat(LC,{hour:'numeric',minute:'2-digit'});
-var t0=new Date();t0.setHours(0,0,0,0);var h='';
+// Bookings are validated in India time (IST, UTC+5:30), so build "today" and the slot cut-off from IST, not the visitor's clock.
+function istNow(){return new Date(Date.now()+19800000)}
+function istToday(){var n=istNow();return new Date(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate())}
+var t0=istToday();var h='';
 for(var k=0;k<7;k++){var x=new Date(2024,0,1+k);h+='<span class="wh" aria-hidden="true">'+wd.format(x)+'</span>'}
 var off=(t0.getDay()+6)%7;for(k=0;k<off;k++)h+='<span class="bl" aria-hidden="true"></span>';
 for(k=0;k<35;k++){var d=new Date(t0);d.setDate(t0.getDate()+k);var g=d.getDay(),tue=g===2,we=g===0||g===6,lbl=full.format(d)+(tue?' – '+T.closed:we?' – '+T.weekend:'');
 h+='<button type="button" data-d="'+iso(d)+'" class="'+(we?'we':'')+(tue?' tu':'')+'" aria-pressed="false" aria-label="'+lbl+'"'+(tue?' disabled':'')+'><small>'+wd.format(d)+'</small><b>'+d.getDate()+'</b><small>'+(tue?T.closedS:mo.format(d))+'</small></button>'}
 cal.innerHTML=h;
-function slots(){var now=new Date(),td=sel.d===iso(now),o='';SL.forEach(function(s){var hh=+s.slice(0,2),dis=td&&hh<=now.getHours(),dt=new Date(2024,0,1,hh);o+='<button type="button" data-s="'+s+'" aria-pressed="'+(sel.s===s)+'"'+(dis?' disabled':'')+'>'+tf.format(dt)+'</button>'});sl.innerHTML=o;if(td&&sel.s&&+sel.s.slice(0,2)<=now.getHours())sel.s=''}
+function slots(){var hr=istNow().getUTCHours(),td=sel.d===iso(istToday()),o='';SL.forEach(function(s){var hh=+s.slice(0,2),dis=td&&hh<=hr,dt=new Date(2024,0,1,hh);o+='<button type="button" data-s="'+s+'" aria-pressed="'+(sel.s===s)+'"'+(dis?' disabled':'')+'>'+tf.format(dt)+'</button>'});sl.innerHTML=o;if(td&&sel.s&&+sel.s.slice(0,2)<=hr)sel.s=''}
 slots();
 cal.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||b.disabled)return;cal.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b)});sel.d=b.dataset.d;document.getElementById('sve-d').textContent='';slots()});
 sl.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||b.disabled)return;sl.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b)});sel.s=b.dataset.s;document.getElementById('sve-s').textContent=''});
